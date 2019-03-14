@@ -9,9 +9,12 @@ library(utils)
 library(ggfortify)
 library(ecodist)
 library(plotly)
-
+library(utils)
+library(memisc)
 ###Load acostic survey single target table
-survey_data=fread("Data/Single target analysis/Hikaru samples/three group data 13_3_19_csv.csv")
+survey_data <- read.csv(unz("Data/Single target analysis/Hikaru samples.zip", "Hikaru samples/three group data 13_3_19_csv.csv"), header = TRUE,
+                 sep = ",") 
+
 set.seed(201)
 survey_data_sub=survey_data %>%
   filter(Target_index %in% sample(x=survey_data$Target_index, size=100, replace = FALSE))
