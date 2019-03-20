@@ -38,12 +38,13 @@ summary(sd_df$SD)
 
 
 ##Function to prepare single target to earth mover distance format
-sample_hist=function(data_in,sample_id){
+sample_hist=function(data_in,sample_id,relative=F){
   sample_data=data_in %>%
     filter(Target_index ==  sample_id) %>%
     select(colnames(data_in)[8:ncol(data_in)])
   ##Transform data- first column is freq and second is response
-  sample_out=data.frame(freq=as.numeric(colnames(sample_data)),res=t(sample_data[1,]))
+  freq_numeric=as.numeric(unlist(lapply(strsplit(colnames(sample_data), "\\X"), "[", 2)))
+  sample_out=data.frame(freq=freq_numeric,res=t(sample_data[1,]))
   ##Round to freq bins of 1 HRTZ
   sample_out$freq_bin=round(sample_out$freq,digits=0)
   sample_out=sample_out%>%
@@ -52,6 +53,9 @@ sample_hist=function(data_in,sample_id){
   sample_bin=sample_out %>%
     group_by(freq_bin) %>%
     summarise(mean = mean(X1))
+  if (isTRUE(relative)){
+    sample_bin$mean=sample_bin$mean/min(sample_bin$mean)
+  }else{}
   #Add weight for emd
   sample_bin$weight=1
   matrix_out=data.matrix(sample_bin[,c("weight","mean")])
@@ -61,10 +65,10 @@ sample_hist=function(data_in,sample_id){
 
 
 ##Apply earth mover distance
-emd_freq_dist=function(data_in=survey_data_sub,sampleA,sampleB){
+emd_freq_dist=function(data_in=survey_data_sub,sampleA,sampleB,relative_in=F){
   ##prepare the samples
-  sample_1=sample_hist(data_in,sampleA)
-  sample_2=sample_hist(data_in,sampleB)
+  sample_1=sample_hist(data_in,sampleA,relative_in)
+  sample_2=sample_hist(data_in,sampleB,relative_in)
   ##Run emd
   emd_dist=emd(sample_1,sample_2)
   # h1=unname(sample_1[,2])
@@ -75,7 +79,7 @@ emd_freq_dist=function(data_in=survey_data_sub,sampleA,sampleB){
 
 
 ##Calculate distance between all sample pairs
-emd_distance_matrix=function(data_in,percent_in=0.9){
+emd_distance_matrix=function(data_in,percent_in=0.9,relative_in=F){
   ##Filter by standard deviation
   sd_df=sd_response(data_in,percent_in)
   ##Unique samples
@@ -86,7 +90,7 @@ emd_distance_matrix=function(data_in,percent_in=0.9){
   ##Apply emd distance to each sample pair
   for (i in 1:nrow(grid_samples)){
     print(nrow(grid_samples)-i)
-    grid_samples[i,"emd"]=emd_freq_dist(data_in,grid_samples[i,"X1"],grid_samples[i,"X2"])
+    grid_samples[i,"emd"]=emd_freq_dist(data_in,grid_samples[i,"X1"],grid_samples[i,"X2"],relative_in)
   }
   grid_samples$X1=as.character(grid_samples$X1)
   grid_samples$X2=as.character(grid_samples$X2)
@@ -94,20 +98,20 @@ emd_distance_matrix=function(data_in,percent_in=0.9){
 }
 
 
-#emd_distance_matrix_dplyr=function(data_in){
-  ##Unique samples
-  samples_u=unique(data_in$Target_index)
-  grid_samples=data.frame(t(combn(samples_u,2)))
-  #print(head(grid_samples))
-  ##Apply emd distance to each sample pair
-  data_out=grid_samples %>% 
-    rowwise() %>% 
-    mutate(emd=emd_freq_dist(data_in,X1,X2)) %>% 
-    select(X1,X2,emd)
-  grid_samples$X1=as.character(grid_samples$X1)
-  grid_samples$X2=as.character(grid_samples$X2)
-  return(grid_samples)
-}
+# emd_distance_matrix_dplyr=function(data_in){
+#   ##Unique samples
+#   samples_u=unique(data_in$Target_index)
+#   grid_samples=data.frame(t(combn(samples_u,2)))
+#   #print(head(grid_samples))
+#   ##Apply emd distance to each sample pair
+#   data_out=grid_samples %>% 
+#     rowwise() %>% 
+#     mutate(emd=emd_freq_dist(data_in,X1,X2)) %>% 
+#     select(X1,X2,emd)
+#   grid_samples$X1=as.character(grid_samples$X1)
+#   grid_samples$X2=as.character(grid_samples$X2)
+#   return(grid_samples)
+# }
 
 
 # emd_distance_matrix_docall=function(data_in){
@@ -122,17 +126,22 @@ emd_distance_matrix=function(data_in,percent_in=0.9){
 #   return(grid_samples)
 # }
 
-
-
+##TEMP
+data_in=survey_data_sub
+sampleA=grid_samples[i,"X1"]
+sampleB=grid_samples[i,"X2"]
+##TEMP  
+  
 hikaru_100_SD0.7=emd_distance_matrix(survey_data_sub,percent_in=0.7)
 
 ###plot pair of histograms
-hist_data=function(data_in,sample_id){
+hist_data=function(data_in,sample_id,relative){
   sample_data=data_in %>%
     filter(Target_index ==  sample_id) %>%
     select(colnames(data_in)[8:ncol(data_in)])
   ##Transform data- first column is freq and second is response
-  sample_out=data.frame(freq=as.numeric(colnames(sample_data)),res=t(sample_data[1,]))
+  freq_numeric=as.numeric(unlist(lapply(strsplit(colnames(sample_data), "\\X"), "[", 2)))
+  sample_out=data.frame(freq=freq_numeric,res=t(sample_data[1,]))
   ##Round to freq bins of 1 HRTZ
   sample_out$freq_bin=round(sample_out$freq,digits=0)
   sample_out=sample_out%>%
@@ -142,15 +151,19 @@ hist_data=function(data_in,sample_id){
     group_by(freq_bin) %>%
     summarise(mean = mean(X1))
   sample_bin$target=sample_id
+  if (isTRUE(relative)){
+    sample_bin$mean=sample_bin$mean/min(sample_bin$mean)
+  }else{}
   return(sample_bin)
 }
+##
+hist_data(data_in,5,relative=T)
 
-
-plot_pair=function(data_in,targets,emd_data){
+plot_pair=function(data_in,targets,emd_data,relative_in=F){
   hist_pair=data.frame()
   hist_sd=data.frame()
   for(t in targets){
-  hist1=hist_data(data_in,t)
+  hist1=hist_data(data_in,t,relative_in)
   hist_sd_c=data.frame(sd=sd(hist1$mean))
   hist_sd_c$target=t
   hist_pair=rbind(hist_pair,hist1)
